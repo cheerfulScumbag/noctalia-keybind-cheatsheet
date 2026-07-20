@@ -1,7 +1,10 @@
 # Noctalia Keybind Cheatsheet
 
-A Noctalia v5 plugin source containing the `~/keybind-cheatsheet` plugin.
+A Noctalia v5 plugin source containing the `kenn/keybind-cheatsheet` plugin.
 It reads Mango, Hyprland, or Niri keybindings only while its panel is open.
+
+`kenn` is the plugin's fixed publisher namespace, not the local Linux
+username. Copy commands containing `kenn/keybind-cheatsheet` unchanged.
 
 For installation, configuration, compositor keybinds, and IPC commands, see
 [`keybind-cheatsheet/README.md`](keybind-cheatsheet/README.md).

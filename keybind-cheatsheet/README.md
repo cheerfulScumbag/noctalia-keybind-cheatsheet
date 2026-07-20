@@ -13,6 +13,10 @@ formats common hardware keys, and keeps custom descriptions and hidden rows.
 | ID | `kenn/keybind-cheatsheet` |
 | Entries | Bar widget: `keybinds`; panel: `cheatsheet` |
 
+`kenn` is the plugin's fixed publisher namespace, not your local Linux
+username. Copy the plugin IDs in the commands below unchanged. User-specific
+configuration paths use the portable `~/.config/...` form.
+
 ## Requirements
 
 Install `hyprctl` on `PATH` when using a Hyprland Lua configuration. Mango,
