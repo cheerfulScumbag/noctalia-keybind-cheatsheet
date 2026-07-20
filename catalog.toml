@@ -1,0 +1,11 @@
+[[plugin]]
+id = "kenn/keybind-cheatsheet"
+name = "Keybind Cheatsheet"
+version = "0.1.0"
+author = "kenn"
+license = "MIT"
+icon = "keyboard"
+description = "Searchable keybindings for Mango, Hyprland, and Niri."
+deprecated = false
+plugin_api = 4
+tags = ["bar", "panel", "utility", "system", "hyprland", "mangowc", "niri"]
