@@ -4,6 +4,10 @@
 local files = {}
 local stateValues = {}
 local fileExistsOverrides = {}
+local configValues = {}
+local availableCommands = {}
+local asyncRequests = {}
+local renderCount = 0
 
 local function normalize(path)
   local absolute = path:sub(1, 1) == "/"
@@ -68,11 +72,14 @@ local noctalia = {
     if content ~= nil then return content, nil end
     return nil, "missing"
   end,
-  writeFile = function(path, content) files[normalize(path)] = content return true end,
+  writeFile = function(path, content)
+    files[normalize(path)] = content
+    return true
+  end,
   pluginDir = function() return "/plugin" end,
   pluginDataDir = function() return "/data" end,
-  commandExists = function() return false end,
-  getConfig = function() return nil end,
+  commandExists = function(name) return availableCommands[name] == true end,
+  getConfig = function(key) return configValues[key] end,
   outputs = function() return {} end,
   focusedOutputName = function() return nil end,
   clipboardText = function() return nil end,
@@ -81,7 +88,10 @@ local noctalia = {
   notifyError = function() end,
   log = function() end,
   togglePanel = function() end,
-  runAsync = function() return false end,
+  runAsync = function(command, callback, timeoutMs)
+    table.insert(asyncRequests, { command = command, callback = callback, timeoutMs = timeoutMs, completed = false })
+    return true
+  end,
   string = { trim = function(value) return (value:gsub("^%s+", ""):gsub("%s+$", "")) end },
   json = { decode = function() return nil, "not implemented in host mock" end, encode = function() return "{}" end },
   state = {
@@ -103,7 +113,13 @@ end
 return {
   noctalia = noctalia,
   ui = ui,
-  panel = { render = function() end, close = function() end, setWantsSecondTicks = function() end },
+  panel = {
+    render = function(_tree)
+      renderCount += 1
+    end,
+    close = function() end,
+    setWantsSecondTicks = function() end,
+  },
   setFiles = function(value)
     files = {}
     fileExistsOverrides = {}
@@ -112,4 +128,22 @@ return {
   setFileExists = function(path, value)
     fileExistsOverrides[normalize(path)] = value
   end,
+  resetRuntime = function()
+    stateValues = {}
+    configValues = {}
+    availableCommands = {}
+    asyncRequests = {}
+    renderCount = 0
+  end,
+  setConfig = function(values) configValues = values or {} end,
+  setAvailableCommands = function(values) availableCommands = values or {} end,
+  asyncLaunchCount = function() return #asyncRequests end,
+  completeAsync = function(index, result)
+    local request = asyncRequests[index]
+    if request == nil or request.completed then return false end
+    request.completed = true
+    if request.callback ~= nil then request.callback(result) end
+    return true
+  end,
+  renderCount = function() return renderCount end,
 }

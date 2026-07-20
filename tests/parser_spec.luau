@@ -84,6 +84,15 @@ expectEqual(parser.bindingAvailableInView(false, true, true, false), true, "Edit
 expectEqual(parser.bindingContentOpacity(true), 0.45, "Hidden binding content is visibly muted")
 expectEqual(parser.bindingContentOpacity(false), 1, "Visible binding content remains fully opaque")
 
+local hiddenPreferences = {
+  [mango.bindings[1].id] = true,
+  ["niri|bind|SUPER|Q|close-window;|"] = true,
+}
+expectEqual(parser.hiddenBindingCount(mango.bindings, hiddenPreferences), 1, "Hidden count only includes the current keymap")
+parser.restoreHiddenBindings(mango.bindings, hiddenPreferences)
+expectEqual(hiddenPreferences[mango.bindings[1].id], nil, "Restore clears hidden entries in the current keymap")
+expectEqual(hiddenPreferences["niri|bind|SUPER|Q|close-window;|"], true, "Restore preserves hidden entries for other keymaps")
+
 local hypr = parser.walkConfig("/fixtures/hypr/main.conf", parser.parseHyprContent)
 expectEqual(#hypr.bindings, 2, "Hyprland expands variables in recursive source paths")
 expectEqual(table.concat(hypr.bindings[1].modifiers, "+"), "SUPER", "Hyprland resolves modifier variables")
@@ -92,6 +101,52 @@ local niri = parser.walkConfig("/fixtures/niri/config.kdl", parser.parseNiriCont
 expectEqual(#niri.bindings, 3, "Niri follows globbed includes")
 expectEqual(niri.bindings[1].description, "Terminal app", "Niri reads quoted titles containing spaces")
 expectEqual(niri.bindings[2].category, "Applications", "Niri preserves comment categories")
+
+host.resetRuntime()
+host.setFiles({
+  ["/fixtures/hypr/live.lua"] = "-- 1. Applications\n",
+})
+host.setConfig({
+  compositor = "hyprland",
+  hyprland_parser = "lua",
+  hyprland_lua_config = "/fixtures/hypr/live.lua",
+})
+host.setAvailableCommands({ hyprctl = true })
+parser.onOpen()
+expectEqual(host.asyncLaunchCount(), 1, "Opening Hyprland Lua mode starts one refresh")
+parser.onIpc("refresh")
+parser.onIpc("refresh")
+expectEqual(host.asyncLaunchCount(), 1, "Repeated refresh requests do not overlap")
+host.completeAsync(1, { exitCode = 0, stdout = "[]", stderr = "", timedOut = false })
+expectEqual(host.asyncLaunchCount(), 2, "Repeated refresh requests coalesce into one follow-up")
+parser.onClose()
+local rendersAfterClose = host.renderCount()
+host.completeAsync(2, { exitCode = 0, stdout = "[]", stderr = "", timedOut = false })
+expectEqual(host.renderCount(), rendersAfterClose, "Async completion cannot render after the panel closes")
+local closedState = parser.lifecycleState()
+expectEqual(closedState.panelOpen, false, "Panel close releases the open state")
+expectEqual(closedState.loading, false, "Panel close releases the loading state")
+expectEqual(closedState.refreshPending, false, "Panel close clears pending refresh work")
+expectEqual(closedState.bindingCount, 0, "Panel close releases parsed bindings")
+expectEqual(closedState.callbackCount, 0, "Panel close releases dynamic callbacks")
+expectEqual(closedState.editDraft, "", "Panel close clears the description draft")
+
+host.resetRuntime()
+host.setFiles({
+  ["/fixtures/mango/live.conf"] = "# Applications\nbind=SUPER,T,spawn,foot #\"Terminal\"\n",
+})
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/live.conf" })
+parser.onOpen()
+expectEqual(parser.lifecycleState().callbackCount, 5, "Normal view only retains callbacks for visible header controls")
+parser.onExit(0)
+expectEqual(parser.lifecycleState().callbackCount, 0, "Plugin exit releases dynamic callbacks")
+expectEqual(parser.lifecycleState().bindingCount, 0, "Plugin exit releases parsed bindings")
+for _ = 1, 50 do
+  parser.onOpen()
+  parser.onClose()
+end
+expectEqual(parser.lifecycleState().callbackCount, 0, "Repeated panel cycles do not retain callbacks")
+expectEqual(parser.lifecycleState().bindingCount, 0, "Repeated panel cycles do not retain bindings")
 
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")

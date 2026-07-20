@@ -29,6 +29,7 @@ local panelError = nil
 local query = ""
 local searchRevision = 0
 local parseGeneration = 0
+local refreshPending = false
 local view = "bindings"
 local editingId = nil
 local editDraft = ""
@@ -581,21 +582,21 @@ local function niriTokens(content)
       index += 1
       local escaped = false
       while index <= #content do
-        char = content:sub(index, index)
+        local stringChar = content:sub(index, index)
         if escaped then
           local replacements = { n = "\n", r = "\r", t = "\t" }
-          table.insert(value, replacements[char] or char)
+          table.insert(value, replacements[stringChar] or stringChar)
           escaped = false
-        elseif char == "\\" then
+        elseif stringChar == "\\" then
           escaped = true
-        elseif char == "\"" then
+        elseif stringChar == "\"" then
           index += 1
           break
         else
-          if char == "\n" then
+          if stringChar == "\n" then
             line += 1
           end
-          table.insert(value, char)
+          table.insert(value, stringChar)
         end
         index += 1
       end
@@ -1050,7 +1051,12 @@ local function finishParse(generation, compositor, result, warnings, err)
     panelError = err
   end
   loading = false
-  render()
+  if refreshPending then
+    refreshPending = false
+    refresh()
+  else
+    render()
+  end
 end
 
 local function configReadError(context)
@@ -1082,6 +1088,11 @@ local function parseHyprLua(generation)
 end
 
 refresh = function()
+  if loading then
+    refreshPending = true
+    return
+  end
+  refreshPending = false
   parseGeneration += 1
   local generation = parseGeneration
   bindings = {}
@@ -1369,6 +1380,24 @@ local function bindingAvailableInView(hidden, undescribed, managing, showUndescr
   return not hidden and (showUndescribed or not undescribed)
 end
 
+local function hiddenBindingCount(bindingList, hiddenPreferences)
+  local currentIds = {}
+  for _, binding in ipairs(bindingList or {}) do
+    currentIds[binding.id] = true
+  end
+  local count = 0
+  for id in pairs(currentIds) do
+    if hiddenPreferences[id] == true then count += 1 end
+  end
+  return count
+end
+
+local function restoreHiddenBindings(bindingList, hiddenPreferences)
+  for _, binding in ipairs(bindingList or {}) do
+    hiddenPreferences[binding.id] = nil
+  end
+end
+
 local function visibleGroups()
   local showUndescribed = noctalia.getConfig("show_undescribed") ~= false
   local managing = view == "edit"
@@ -1455,16 +1484,16 @@ local function bindingRow(binding, occurrence)
 
   local description = effectiveDescription(binding)
   local identity = binding.id .. "#" .. occurrence
-  local visibilityChanged = callback("visibility", function()
-    if hidden then
-      preferences.hidden[binding.id] = nil
-    else
-      preferences.hidden[binding.id] = true
-    end
-    savePreferences()
-    render()
-  end)
-  if editingId == identity then
+  if view == "edit" and editingId == identity then
+    local visibilityChanged = callback("visibility", function()
+      if hidden then
+        preferences.hidden[binding.id] = nil
+      else
+        preferences.hidden[binding.id] = true
+      end
+      savePreferences()
+      render()
+    end)
     local inputChanged = callback("editChange", function(value) editDraft = value end)
     local submit = callback("editSubmit", function(value) saveCustomDescription(binding, value) end)
     local save = callback("editSave", function() saveCustomDescription(binding, editDraft) end)
@@ -1482,11 +1511,6 @@ local function bindingRow(binding, occurrence)
     })
   end
 
-  local edit = callback("edit", function()
-    editingId = identity
-    editDraft = description
-    render()
-  end)
   local labels = {
     ui.label({
       text = description,
@@ -1504,6 +1528,20 @@ local function bindingRow(binding, occurrence)
     ui.column({ flexGrow = 1, gap = 0, opacity = contentOpacity }, labels),
   }
   if view == "edit" then
+    local edit = callback("edit", function()
+      editingId = identity
+      editDraft = description
+      render()
+    end)
+    local visibilityChanged = callback("visibility", function()
+      if hidden then
+        preferences.hidden[binding.id] = nil
+      else
+        preferences.hidden[binding.id] = true
+      end
+      savePreferences()
+      render()
+    end)
     table.insert(row, ui.button({ glyph = "pencil", width = 22, height = 22, glyphSize = 12, variant = "ghost", controlSize = "sm", tooltip = tr("edit_description"), onClick = edit }))
     table.insert(row, ui.button({ glyph = hidden and "eye-off" or "eye", width = 22, height = 22, glyphSize = 13, variant = "ghost", controlSize = "sm", selected = hidden, tooltip = hidden and tr("show_binding") or tr("hide_binding"), onClick = visibilityChanged }))
   end
@@ -1544,9 +1582,7 @@ local function bindingsBody()
 end
 
 local function hiddenCount()
-  local count = 0
-  for _, hidden in pairs(preferences.hidden) do if hidden == true then count += 1 end end
-  return count
+  return hiddenBindingCount(bindings, preferences.hidden)
 end
 
 local function colorControl(bucket, property)
@@ -1607,21 +1643,6 @@ local function renderHeader()
     editDraft = ""
     render()
   end)
-  local searchChanged = callback("search", function(value)
-    query = value
-    editingId = nil
-    render()
-  end)
-  local clearSearch = callback("clearSearch", function()
-    query = ""
-    searchRevision += 1
-    render()
-  end)
-  local restoreHidden = callback("restoreHidden", function()
-    preferences.hidden = {}
-    savePreferences()
-    render()
-  end)
   local title = tr("title")
   if currentCompositor ~= "" then
     title = (currentCompositor == "mango" and "Mango" or (currentCompositor == "niri" and "Niri" or "Hyprland")) .. " Keymap"
@@ -1633,13 +1654,29 @@ local function renderHeader()
     }),
   }
   if (view == "bindings" or view == "edit") and not loading and panelError == nil then
+    local searchChanged = callback("search", function(value)
+      query = value
+      editingId = nil
+      render()
+    end)
+    local clearSearch = callback("clearSearch", function()
+      query = ""
+      searchRevision += 1
+      render()
+    end)
     table.insert(children, ui.input({ key = "search-" .. searchRevision, value = query, placeholder = tr("search_placeholder"), controlSize = "sm", width = 300, onChange = searchChanged }))
     table.insert(children, ui.button({ glyph = "x", width = 26, variant = "ghost", controlSize = "sm", enabled = query ~= "", tooltip = tr("clear"), onClick = clearSearch }))
   end
   table.insert(children, ui.label({ text = tr("binding_count", { count = #bindings }), color = "on_surface_variant", fontSize = 12 }))
   if view == "edit" then
-    table.insert(children, ui.label({ text = tr("hidden_count", { count = hiddenCount() }), color = "on_surface_variant", fontSize = 12 }))
-    table.insert(children, ui.button({ glyph = "eye", variant = "ghost", controlSize = "sm", enabled = hiddenCount() > 0, tooltip = tr("restore_hidden"), onClick = restoreHidden }))
+    local count = hiddenCount()
+    local restoreHidden = callback("restoreHidden", function()
+      restoreHiddenBindings(bindings, preferences.hidden)
+      savePreferences()
+      render()
+    end)
+    table.insert(children, ui.label({ text = tr("hidden_count", { count = count }), color = "on_surface_variant", fontSize = 12 }))
+    table.insert(children, ui.button({ glyph = "eye", variant = "ghost", controlSize = "sm", enabled = count > 0, tooltip = tr("restore_hidden"), onClick = restoreHidden }))
   end
   table.insert(children, ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("refresh"), enabled = not loading, onClick = refreshClick }))
   table.insert(children, ui.button({ glyph = view == "edit" and "check" or "pencil", variant = "ghost", tooltip = view == "edit" and tr("finish_editing") or tr("edit_bindings"), selected = view == "edit", onClick = editMode }))
@@ -1754,26 +1791,41 @@ noctalia.state.watch("refresh_generation", function(_value)
   if panelOpen then refresh() end
 end)
 
+local function releasePanelState()
+  panelOpen = false
+  parseGeneration += 1
+  bindings = {}
+  parseWarnings = {}
+  currentCompositor = ""
+  panelError = nil
+  loading = false
+  refreshPending = false
+  view = "bindings"
+  query = ""
+  editingId = nil
+  editDraft = ""
+  resetCallbacks()
+end
+
 function onOpen(_context)
   panelOpen = true
+  loading = false
+  refreshPending = false
   view = "bindings"
   query = ""
   searchRevision += 1
   editingId = nil
+  editDraft = ""
   loadPreferences()
   refresh()
 end
 
 function onClose()
-  panelOpen = false
-  parseGeneration += 1
-  bindings = {}
-  parseWarnings = {}
-  panelError = nil
-  loading = false
-  query = ""
-  editingId = nil
-  resetCallbacks()
+  releasePanelState()
+end
+
+function onExit(_signal)
+  releasePanelState()
 end
 
 function onIpc(event, _payload)
@@ -1784,6 +1836,17 @@ function onIpc(event, _payload)
   elseif event == "self-test" then
     runSelfTest()
   end
+end
+
+local function lifecycleState()
+  return {
+    panelOpen = panelOpen,
+    loading = loading,
+    refreshPending = refreshPending,
+    bindingCount = #bindings,
+    callbackCount = #dynamicCallbacks,
+    editDraft = editDraft,
+  }
 end
 
 return {
@@ -1797,7 +1860,14 @@ return {
   configReadError = configReadError,
   bindingAvailableInView = bindingAvailableInView,
   bindingContentOpacity = bindingContentOpacity,
+  hiddenBindingCount = hiddenBindingCount,
+  restoreHiddenBindings = restoreHiddenBindings,
   categoryPriority = categoryPriority,
   friendlyAction = friendlyAction,
   runSelfTest = runSelfTest,
+  onOpen = onOpen,
+  onClose = onClose,
+  onExit = onExit,
+  onIpc = onIpc,
+  lifecycleState = lifecycleState,
 }
