@@ -6,6 +6,9 @@ It reads Mango, Hyprland, or Niri keybindings only while its panel is open.
 For installation, configuration, compositor keybinds, and IPC commands, see
 [`keybind-cheatsheet/README.md`](keybind-cheatsheet/README.md).
 
+Hyprland and Niri users can help validate real compositor behavior using the
+[`TESTING.md`](TESTING.md) checklist before the community-store submission.
+
 ## Local development
 
 Add this checkout as a path source, enable the plugin, then add its `keybinds`
