@@ -9,6 +9,24 @@ For installation, configuration, compositor keybinds, and IPC commands, see
 Hyprland and Niri users can help validate real compositor behavior using the
 [`TESTING.md`](TESTING.md) checklist before the community-store submission.
 
+## Screenshots
+
+### Keymap
+
+![Categorized Mango keymap](screenshots/overview.webp)
+
+### Search
+
+![Filtered keybind search](screenshots/search.webp)
+
+### Edit mode
+
+![Description and visibility editing](screenshots/edit-mode.webp)
+
+### Settings
+
+![Compositor and layout settings](screenshots/settings.webp)
+
 ## Local development
 
 Add this checkout as a path source, enable the plugin, then add its `keybinds`
