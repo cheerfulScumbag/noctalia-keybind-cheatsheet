@@ -52,7 +52,7 @@ Mod+F1 { spawn "noctalia" "msg" "panel-toggle" "kenn/keybind-cheatsheet:cheatshe
 
 Type in the search field to filter by key, description, action, or category.
 Use the header pencil to enter edit mode. Edit mode keeps hidden bindings
-visible and struck through while descriptions and visibility are changed with
+visible with muted content while descriptions and visibility are changed with
 the row's pencil and eye buttons; leaving edit mode applies those visibility
 choices to the main keymap. The palette button opens key-color controls with
 native color picking, clipboard paste, and reset actions.

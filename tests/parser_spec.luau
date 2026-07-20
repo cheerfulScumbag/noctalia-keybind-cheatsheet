@@ -81,7 +81,8 @@ expectEqual(parser.categoryPriority("Without Description") > parser.categoryPrio
 expectEqual(parser.bindingAvailableInView(true, false, false, true), false, "Hidden bindings stay out of the main view")
 expectEqual(parser.bindingAvailableInView(true, false, true, true), true, "Hidden bindings remain visible in edit mode")
 expectEqual(parser.bindingAvailableInView(false, true, true, false), true, "Edit mode includes undescribed bindings")
-expectEqual(parser.strikeText("Super 1"), "S̶u̶p̶e̶r̶ 1̶", "Hidden binding text is visibly struck without marking spaces")
+expectEqual(parser.bindingContentOpacity(true), 0.45, "Hidden binding content is visibly muted")
+expectEqual(parser.bindingContentOpacity(false), 1, "Visible binding content remains fully opaque")
 
 local hypr = parser.walkConfig("/fixtures/hypr/main.conf", parser.parseHyprContent)
 expectEqual(#hypr.bindings, 2, "Hyprland expands variables in recursive source paths")

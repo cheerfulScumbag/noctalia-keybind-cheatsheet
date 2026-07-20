@@ -1194,16 +1194,11 @@ local function pasteColor(bucketId, property)
   end
 end
 
-local function strikeText(value)
-  local struck = {}
-  for _, codepoint in utf8.codes(value or "") do
-    table.insert(struck, utf8.char(codepoint))
-    if codepoint ~= 32 then table.insert(struck, utf8.char(0x336)) end
-  end
-  return table.concat(struck)
+local function bindingContentOpacity(hidden)
+  return hidden and 0.45 or 1
 end
 
-local function keyPill(text, bucketId, key, struck)
+local function keyPill(text, bucketId, key)
   return ui.column({
     key = key,
     fill = colorValue(bucketId, "background"),
@@ -1212,7 +1207,7 @@ local function keyPill(text, bucketId, key, struck)
     paddingV = 3,
     align = "center",
   }, {
-    ui.label({ text = struck and strikeText(text) or text, color = colorValue(bucketId, "text"), fontSize = 12, fontWeight = "bold", maxLines = 1 }),
+    ui.label({ text = text, color = colorValue(bucketId, "text"), fontSize = 12, fontWeight = "bold", maxLines = 1 }),
   })
 end
 
@@ -1451,11 +1446,12 @@ end
 
 local function bindingRow(binding, occurrence)
   local hidden = preferences.hidden[binding.id] == true
+  local contentOpacity = bindingContentOpacity(hidden)
   local pills = {}
   for index, modifier in ipairs(binding.modifiers) do
-    table.insert(pills, keyPill(modifier == "SUPER" and "Super" or modifier:sub(1, 1) .. lower(modifier:sub(2)), bucketForModifier(modifier), "mod-" .. index, hidden))
+    table.insert(pills, keyPill(modifier == "SUPER" and "Super" or modifier:sub(1, 1) .. lower(modifier:sub(2)), bucketForModifier(modifier), "mod-" .. index))
   end
-  table.insert(pills, keyPill(formatKey(binding.key), bucketForKey(binding.key), "key", hidden))
+  table.insert(pills, keyPill(formatKey(binding.key), bucketForKey(binding.key), "key"))
 
   local description = effectiveDescription(binding)
   local identity = binding.id .. "#" .. occurrence
@@ -1478,7 +1474,7 @@ local function bindingRow(binding, occurrence)
       render()
     end)
     return ui.row({ key = "edit-" .. identity, gap = 6, align = "center", paddingV = 0 }, {
-      ui.row({ minWidth = 188, gap = 3, align = "center" }, pills),
+      ui.row({ minWidth = 188, gap = 3, align = "center", opacity = contentOpacity }, pills),
       ui.input({ key = "description-" .. identity, value = editDraft, placeholder = tr("edit_description"), focus = true, controlSize = "sm", flexGrow = 1, onChange = inputChanged, onSubmit = submit }),
       ui.button({ glyph = "check", width = 22, height = 22, glyphSize = 12, variant = "ghost", controlSize = "sm", tooltip = tr("save"), onClick = save }),
       ui.button({ glyph = "close", width = 22, height = 22, glyphSize = 12, variant = "ghost", controlSize = "sm", tooltip = tr("cancel"), onClick = cancel }),
@@ -1493,7 +1489,7 @@ local function bindingRow(binding, occurrence)
   end)
   local labels = {
     ui.label({
-      text = hidden and strikeText(description) or description,
+      text = description,
       color = colorValue("description", "text"),
       fontWeight = "bold",
       fontSize = 13,
@@ -1501,11 +1497,11 @@ local function bindingRow(binding, occurrence)
     }),
   }
   if noctalia.getConfig("show_actions") ~= false and description ~= "" and binding.action ~= "" then
-    table.insert(labels, ui.label({ text = hidden and strikeText(binding.action) or binding.action, color = "on_surface_variant", fontSize = 11, maxLines = 1 }))
+    table.insert(labels, ui.label({ text = binding.action, color = "on_surface_variant", fontSize = 11, maxLines = 1 }))
   end
   local row = {
-    ui.row({ minWidth = 188, gap = 3, align = "center" }, pills),
-    ui.column({ flexGrow = 1, gap = 0 }, labels),
+    ui.row({ minWidth = 188, gap = 3, align = "center", opacity = contentOpacity }, pills),
+    ui.column({ flexGrow = 1, gap = 0, opacity = contentOpacity }, labels),
   }
   if view == "edit" then
     table.insert(row, ui.button({ glyph = "pencil", width = 22, height = 22, glyphSize = 12, variant = "ghost", controlSize = "sm", tooltip = tr("edit_description"), onClick = edit }))
@@ -1585,11 +1581,6 @@ local function appearanceBody()
       }),
     }))
   end
-  local restore = callback("restoreHidden", function()
-    preferences.hidden = {}
-    savePreferences()
-    render()
-  end)
   local resetAll = callback("resetAllColors", function()
     preferences.colors = {}
     savePreferences()
@@ -1597,14 +1588,12 @@ local function appearanceBody()
   end)
   table.insert(rows, ui.separator({ spacing = 6 }))
   table.insert(rows, ui.row({ gap = 8, align = "center" }, {
-    ui.button({ glyph = "eye", text = tr("restore_hidden"), enabled = hiddenCount() > 0, onClick = restore }),
     ui.button({ glyph = "restore", text = tr("reset_colors"), onClick = resetAll }),
   }))
   return ui.scroll({ flexGrow = 1, gap = 4 }, rows)
 end
 
 local function renderHeader()
-  local close = callback("close", function() panel.close() end)
   local refreshClick = callback("refresh", function() refresh() end)
   local editMode = callback("editMode", function()
     view = view == "edit" and "bindings" or "edit"
@@ -1628,6 +1617,11 @@ local function renderHeader()
     searchRevision += 1
     render()
   end)
+  local restoreHidden = callback("restoreHidden", function()
+    preferences.hidden = {}
+    savePreferences()
+    render()
+  end)
   local title = tr("title")
   if currentCompositor ~= "" then
     title = (currentCompositor == "mango" and "Mango" or (currentCompositor == "niri" and "Niri" or "Hyprland")) .. " Keymap"
@@ -1645,11 +1639,11 @@ local function renderHeader()
   table.insert(children, ui.label({ text = tr("binding_count", { count = #bindings }), color = "on_surface_variant", fontSize = 12 }))
   if view == "edit" then
     table.insert(children, ui.label({ text = tr("hidden_count", { count = hiddenCount() }), color = "on_surface_variant", fontSize = 12 }))
+    table.insert(children, ui.button({ glyph = "eye", variant = "ghost", controlSize = "sm", enabled = hiddenCount() > 0, tooltip = tr("restore_hidden"), onClick = restoreHidden }))
   end
   table.insert(children, ui.button({ glyph = "refresh", variant = "ghost", tooltip = tr("refresh"), enabled = not loading, onClick = refreshClick }))
   table.insert(children, ui.button({ glyph = view == "edit" and "check" or "pencil", variant = "ghost", tooltip = view == "edit" and tr("finish_editing") or tr("edit_bindings"), selected = view == "edit", onClick = editMode }))
-  table.insert(children, ui.button({ glyph = view == "appearance" and "arrow-left" or "palette", variant = "ghost", tooltip = view == "appearance" and tr("back") or tr("appearance"), selected = view == "appearance", onClick = appearance }))
-  table.insert(children, ui.button({ glyph = "close", variant = "ghost", tooltip = tr("close"), onClick = close }))
+  table.insert(children, ui.button({ glyph = view == "appearance" and "check" or "palette", variant = "ghost", tooltip = view == "appearance" and tr("back") or tr("appearance"), selected = view == "appearance", onClick = appearance }))
   return ui.row({ align = "center", justify = "space_between", gap = 7 }, children)
 end
 
@@ -1802,7 +1796,7 @@ return {
   walkConfig = walkConfig,
   configReadError = configReadError,
   bindingAvailableInView = bindingAvailableInView,
-  strikeText = strikeText,
+  bindingContentOpacity = bindingContentOpacity,
   categoryPriority = categoryPriority,
   friendlyAction = friendlyAction,
   runSelfTest = runSelfTest,
