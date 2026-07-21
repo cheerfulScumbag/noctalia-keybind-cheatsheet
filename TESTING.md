@@ -37,17 +37,19 @@ works before opening the panel.
 ## Checks
 
 1. Confirm the panel opens, closes, and reopens from both IPC and the bar widget.
-2. Confirm every expected binding appears with readable modifiers and keys.
-3. Compare bindings from recursively included and globbed files.
-4. Search by key, description, action, and category.
-5. Hide a binding, close the panel, reopen it, and confirm the choice persists.
-6. Restore hidden bindings and confirm bindings hidden for another compositor are unchanged.
-7. Add a custom description and color, then confirm both persist after reopening.
-8. Refresh repeatedly and confirm only the final keymap is shown without errors.
-9. Run the parser self-test:
+2. Restart Noctalia and confirm the first panel opening already shows the
+   prepared snapshot without an `onOpen` timeout.
+3. Confirm every expected binding appears with readable modifiers and keys.
+4. Compare bindings from recursively included and globbed files.
+5. Search by key, description, action, and category.
+6. Hide a binding, close the panel, reopen it, and confirm the choice persists.
+7. Restore hidden bindings and confirm bindings hidden for another compositor are unchanged.
+8. Add a custom description and color, then confirm both persist after reopening.
+9. Refresh repeatedly and confirm only the final keymap is shown without errors.
+10. Run the parser self-test:
 
    ```sh
-   noctalia msg plugin kenn/keybind-cheatsheet:cheatsheet all self-test
+   noctalia msg plugin kenn/keybind-cheatsheet:data all self-test
    ```
 
 ## Reporting results

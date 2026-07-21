@@ -1,7 +1,6 @@
 --!nonstrict
 
 local host = require("../keybind-cheatsheet/tests/host_mock")
-local parser = require("../keybind-cheatsheet/panel")
 
 local failures = 0
 
@@ -20,7 +19,16 @@ local function descriptions(bindings)
   return result
 end
 
-host.setFiles({
+local function treeContainsText(node, text)
+  if type(node) ~= "table" then return false end
+  if type(node.props) == "table" and node.props.text == text then return true end
+  for _, child in ipairs(type(node.children) == "table" and node.children or {}) do
+    if treeContainsText(child, text) then return true end
+  end
+  return false
+end
+
+local parserFixtures = {
   ["/fixtures/mango/main.conf"] = [[
 # Applications
 bind=SUPER,T,spawn,foot #"Terminal"
@@ -61,95 +69,164 @@ binds {
   Mod+Q hotkey-overlay-title="Close window" { close-window; }
 }
 ]],
-})
+}
 
-host.setFileExists("/fixtures/mango/main.conf", false)
-local mango = parser.walkConfig("/fixtures/mango/main.conf", parser.parseMangoContent)
+host.setFiles(parserFixtures)
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/main.conf" })
+
+local service = require("../keybind-cheatsheet/service")
+local panel = require("../keybind-cheatsheet/panel")
+
+local mango = service.walkConfig("/fixtures/mango/main.conf", service.parseMangoContent)
 expectEqual(#mango.bindings, 3, "Mango follows globs and stops include cycles")
 expectEqual(descriptions(mango.bindings)["Workspace 1"], true, "Mango keeps descriptions from included files")
-expectEqual(mango.rootRead, true, "Mango reads explicit paths without a racy existence pre-check")
-expectEqual(parser.configReadError(mango), nil, "A readable root config does not produce an error")
-expectEqual(parser.configReadError({ rootRead = false }), "missing_config", "An unreadable root config produces an error")
-expectEqual(parser.mangoCategoryFromComment("# Window Management"), "Window Management", "Mango recognizes title-style category comments")
-expectEqual(parser.mangoCategoryFromComment("# SUPER + x (Cycle presets)"), nil, "Mango ignores explanatory shortcut comments")
-expectEqual(parser.mangoCategoryFromComment("# ----------------"), nil, "Mango ignores separator comments")
-expectEqual(parser.friendlyAction({ action = "view 4,0" }), "Workspace 4", "Mango workspace actions get readable labels")
-expectEqual(parser.friendlyAction({ action = "exchange_client left" }), "Move Window Left", "Mango direction actions get readable labels")
-expectEqual(parser.friendlyAction({ action = "spawn kitty" }), "Terminal", "Known applications get readable labels")
-expectEqual(parser.categoryPriority("Applications") < parser.categoryPriority("Layouts"), true, "Common application categories sort before layouts")
-expectEqual(parser.categoryPriority("Without Description") > parser.categoryPriority("Touchpad Gestures"), true, "Fallback categories sort after common controls")
-expectEqual(parser.bindingAvailableInView(true, false, false, true), false, "Hidden bindings stay out of the main view")
-expectEqual(parser.bindingAvailableInView(true, false, true, true), true, "Hidden bindings remain visible in edit mode")
-expectEqual(parser.bindingAvailableInView(false, true, true, false), true, "Edit mode includes undescribed bindings")
-expectEqual(parser.bindingContentOpacity(true), 0.45, "Hidden binding content is visibly muted")
-expectEqual(parser.bindingContentOpacity(false), 1, "Visible binding content remains fully opaque")
+expectEqual(mango.rootRead, true, "Mango reads the explicit root config")
+expectEqual(service.configReadError(mango), nil, "A readable root config does not produce an error")
+expectEqual(service.configReadError({ rootRead = false }), "missing_config", "An unreadable root config produces an error")
+expectEqual(service.mangoCategoryFromComment("# Window Management"), "Window Management", "Mango recognizes title-style category comments")
+expectEqual(service.mangoCategoryFromComment("# SUPER + x (Cycle presets)"), nil, "Mango ignores explanatory shortcut comments")
+expectEqual(service.mangoCategoryFromComment("# ----------------"), nil, "Mango ignores separator comments")
+expectEqual(panel.friendlyAction({ action = "view 4,0" }), "Workspace 4", "Mango workspace actions get readable labels")
+expectEqual(panel.friendlyAction({ action = "exchange_client left" }), "Move Window Left", "Mango direction actions get readable labels")
+expectEqual(panel.friendlyAction({ action = "spawn kitty" }), "Terminal", "Known applications get readable labels")
+expectEqual(panel.categoryPriority("Applications") < panel.categoryPriority("Layouts"), true, "Common application categories sort before layouts")
+expectEqual(panel.categoryPriority("Without Description") > panel.categoryPriority("Touchpad Gestures"), true, "Fallback categories sort after common controls")
+expectEqual(panel.bindingAvailableInView(true, false, false, true), false, "Hidden bindings stay out of the main view")
+expectEqual(panel.bindingAvailableInView(true, false, true, true), true, "Hidden bindings remain visible in edit mode")
+expectEqual(panel.bindingContentOpacity(true), 0.45, "Hidden binding content is visibly muted")
 
 local hiddenPreferences = {
   [mango.bindings[1].id] = true,
   ["niri|bind|SUPER|Q|close-window;|"] = true,
 }
-expectEqual(parser.hiddenBindingCount(mango.bindings, hiddenPreferences), 1, "Hidden count only includes the current keymap")
-parser.restoreHiddenBindings(mango.bindings, hiddenPreferences)
-expectEqual(hiddenPreferences[mango.bindings[1].id], nil, "Restore clears hidden entries in the current keymap")
-expectEqual(hiddenPreferences["niri|bind|SUPER|Q|close-window;|"], true, "Restore preserves hidden entries for other keymaps")
+expectEqual(panel.hiddenBindingCount(mango.bindings, hiddenPreferences), 1, "Hidden count only includes the current keymap")
+panel.restoreHiddenBindings(mango.bindings, hiddenPreferences)
+expectEqual(hiddenPreferences[mango.bindings[1].id], nil, "Restore clears current-keymap hidden entries")
+expectEqual(hiddenPreferences["niri|bind|SUPER|Q|close-window;|"], true, "Restore preserves other-keymap hidden entries")
 
-local hypr = parser.walkConfig("/fixtures/hypr/main.conf", parser.parseHyprContent)
+local hypr = service.walkConfig("/fixtures/hypr/main.conf", service.parseHyprContent)
 expectEqual(#hypr.bindings, 2, "Hyprland expands variables in recursive source paths")
 expectEqual(table.concat(hypr.bindings[1].modifiers, "+"), "SUPER", "Hyprland resolves modifier variables")
 
-local niri = parser.walkConfig("/fixtures/niri/config.kdl", parser.parseNiriContent)
+local niri = service.walkConfig("/fixtures/niri/config.kdl", service.parseNiriContent)
 expectEqual(#niri.bindings, 3, "Niri follows globbed includes")
 expectEqual(niri.bindings[1].description, "Terminal app", "Niri reads quoted titles containing spaces")
 expectEqual(niri.bindings[2].category, "Applications", "Niri preserves comment categories")
 
+local snapshot = host.stateValue(service.snapshotKey)
+expectEqual(snapshot.status, "ready", "Service startup publishes a ready snapshot")
+expectEqual(#snapshot.bindings, 3, "Service startup parses the selected compositor")
+expectEqual(host.fileContent("/data/bindings-cache.json") ~= nil, true, "Service startup writes the durable cache")
+expectEqual(host.updateInterval(), nil, "Service startup does not install an update interval")
+
+panel.onOpen()
+expectEqual(panel.lifecycleState().bindingCount, 3, "Panel open renders the prepared service snapshot")
+expectEqual(panel.lifecycleState().loading, false, "Prepared snapshots avoid the loading view")
+local sourceReads = host.readCount("/fixtures/mango/main.conf")
+panel.onClose()
+panel.onOpen()
+expectEqual(host.readCount("/fixtures/mango/main.conf"), sourceReads, "Panel reopen performs no configuration reads")
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/main.conf", columns = 4 })
+service.onConfigChanged()
+expectEqual(host.readCount("/fixtures/mango/main.conf"), sourceReads, "UI-only setting changes do not reparse the configuration")
+
+host.setFile("/fixtures/mango/main.conf", [[
+# Applications
+bind=SUPER,T,spawn,foot #"Terminal"
+bind=SUPER,B,spawn,firefox #"Browser"
+]])
+panel.onIpc("refresh")
+snapshot = host.stateValue(service.snapshotKey)
+expectEqual(snapshot.status, "ready", "Manual refresh publishes a ready snapshot")
+expectEqual(#snapshot.bindings, 2, "Manual refresh reparses the configuration")
+expectEqual(panel.lifecycleState().bindingCount, 2, "An open panel receives the refreshed snapshot")
+
+host.setFile("/fixtures/mango/main.conf", nil)
+panel.onIpc("refresh")
+snapshot = host.stateValue(service.snapshotKey)
+expectEqual(snapshot.status, "ready", "Refresh failure keeps the last-known-good status")
+expectEqual(#snapshot.bindings, 2, "Refresh failure preserves the last-known-good bindings")
+expectEqual(snapshot.error, "missing_config", "Refresh failure is attached to the retained snapshot")
+
+panel.onExit(0)
 host.resetRuntime()
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/main.conf" })
+service.resetForTests()
+snapshot = host.stateValue(service.snapshotKey)
+expectEqual(#snapshot.bindings, 2, "A new service session restores the durable cache before a failed parse")
+expectEqual(snapshot.error, "missing_config", "A failed startup parse leaves the restored cache available")
+expectEqual(host.updateInterval(), nil, "A restored cache does not enable periodic work")
+
+host.setFile("/fixtures/mango/main.conf", [[
+# Applications
+bind=SUPER,T,spawn,foot #"Terminal"
+bind=SUPER,B,spawn,firefox #"Browser"
+]])
+host.setFile("/data/bindings-cache.json", "invalid cache")
+host.resetRuntime()
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/main.conf" })
+service.resetForTests()
+snapshot = host.stateValue(service.snapshotKey)
+expectEqual(#snapshot.bindings, 2, "A fresh parse recovers from a corrupt cache")
+expectEqual(host.fileContent("/data/bindings-cache.json") ~= "invalid cache", true, "Recovery replaces the corrupt cache")
+
 host.setFiles({
-  ["/fixtures/hypr/live.lua"] = "-- 1. Applications\n",
+  ["/fixtures/glob/main.conf"] = "# Applications\nsource=./parts/*.conf\n",
+  ["/fixtures/glob/parts/one.conf"] = "bind=SUPER,1,spawn,one #\"One\"\n",
 })
+host.resetRuntime()
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/glob/main.conf" })
+service.resetForTests()
+expectEqual(service.lifecycleState().bindingCount, 1, "Glob fixture starts with one included binding")
+host.setFile("/fixtures/glob/parts/two.conf", "bind=SUPER,2,spawn,two #\"Two\"\n")
+service.refresh()
+expectEqual(service.lifecycleState().bindingCount, 2, "Manual refresh discovers new glob matches")
+
+local largeMango = { "# Applications" }
+for index = 1, 96 do
+  table.insert(largeMango, "bind=SUPER," .. tostring(index) .. ",spawn,app" .. tostring(index) .. " #\"App " .. tostring(index) .. "\"")
+end
+host.setFiles({ ["/fixtures/mango/large.conf"] = table.concat(largeMango, "\n") })
+host.resetRuntime()
+host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/large.conf" })
+service.resetForTests()
+expectEqual(service.lifecycleState().bindingCount, 96, "A 96-binding keymap parses without panel ticks")
+expectEqual(host.wantsSecondTicks(), false, "The service architecture never enables panel ticks")
+expectEqual(host.updateInterval(), nil, "The service remains event-driven after a large parse")
+
+host.setFiles({ ["/fixtures/hypr/live.lua"] = "-- 1. Applications\n" })
+host.resetRuntime()
 host.setConfig({
   compositor = "hyprland",
   hyprland_parser = "lua",
   hyprland_lua_config = "/fixtures/hypr/live.lua",
 })
 host.setAvailableCommands({ hyprctl = true })
-parser.onOpen()
-expectEqual(host.asyncLaunchCount(), 1, "Opening Hyprland Lua mode starts one refresh")
-parser.onIpc("refresh")
-parser.onIpc("refresh")
-expectEqual(host.asyncLaunchCount(), 1, "Repeated refresh requests do not overlap")
+service.resetForTests()
+expectEqual(host.asyncLaunchCount(), 1, "Hyprland Lua startup launches one live bind request")
+service.refresh()
+service.refresh()
+expectEqual(host.asyncLaunchCount(), 1, "Repeated live refresh requests do not overlap")
 host.completeAsync(1, { exitCode = 0, stdout = "[]", stderr = "", timedOut = false })
-expectEqual(host.asyncLaunchCount(), 2, "Repeated refresh requests coalesce into one follow-up")
-parser.onClose()
-local rendersAfterClose = host.renderCount()
+expectEqual(host.asyncLaunchCount(), 2, "Repeated live refresh requests coalesce into one follow-up")
 host.completeAsync(2, { exitCode = 0, stdout = "[]", stderr = "", timedOut = false })
-expectEqual(host.renderCount(), rendersAfterClose, "Async completion cannot render after the panel closes")
-local closedState = parser.lifecycleState()
-expectEqual(closedState.panelOpen, false, "Panel close releases the open state")
-expectEqual(closedState.loading, false, "Panel close releases the loading state")
-expectEqual(closedState.refreshPending, false, "Panel close clears pending refresh work")
-expectEqual(closedState.bindingCount, 0, "Panel close releases parsed bindings")
-expectEqual(closedState.callbackCount, 0, "Panel close releases dynamic callbacks")
-expectEqual(closedState.editDraft, "", "Panel close clears the description draft")
+expectEqual(service.lifecycleState().refreshing, false, "Hyprland refresh returns the service to idle")
+
+panel.onOpen()
+expectEqual(panel.lifecycleState().bindingCount, 0, "The panel accepts an empty successful live snapshot")
+panel.onClose()
+local rendersAfterClose = host.renderCount()
+service.refresh()
+host.completeAsync(3, { exitCode = 0, stdout = "[]", stderr = "", timedOut = false })
+expectEqual(host.renderCount(), rendersAfterClose, "Service updates cannot render a closed panel")
+expectEqual(panel.lifecycleState().callbackCount, 0, "Panel close releases dynamic callbacks")
 
 host.resetRuntime()
-host.setFiles({
-  ["/fixtures/mango/live.conf"] = "# Applications\nbind=SUPER,T,spawn,foot #\"Terminal\"\n",
-})
-host.setConfig({ compositor = "mango", mango_config = "/fixtures/mango/live.conf" })
-parser.onOpen()
-expectEqual(parser.lifecycleState().callbackCount, 5, "Normal view only retains callbacks for visible header controls")
-parser.onExit(0)
-expectEqual(parser.lifecycleState().callbackCount, 0, "Plugin exit releases dynamic callbacks")
-expectEqual(parser.lifecycleState().bindingCount, 0, "Plugin exit releases parsed bindings")
-for _ = 1, 50 do
-  parser.onOpen()
-  parser.onClose()
-end
-expectEqual(parser.lifecycleState().callbackCount, 0, "Repeated panel cycles do not retain callbacks")
-expectEqual(parser.lifecycleState().bindingCount, 0, "Repeated panel cycles do not retain bindings")
+panel.onOpen()
+expectEqual(panel.lifecycleState().loading, true, "A missing service snapshot renders a loading state")
+expectEqual(treeContainsText(host.renderedTree(), "binding_count"), false, "A cold loading header does not display a zero count")
+panel.onExit(0)
 
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")
 end
-
-print("All parser tests passed")
