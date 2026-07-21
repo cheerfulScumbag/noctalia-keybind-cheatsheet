@@ -5,8 +5,6 @@ Its event-driven data service reads Mango, Hyprland, or Niri keybindings once
 when Noctalia loads the plugin and whenever a refresh is explicitly requested.
 The panel opens from the prepared snapshot without reparsing configuration.
 
-`kenn` is the plugin's fixed publisher namespace, not the local Linux
-username. Copy commands containing `kenn/keybind-cheatsheet` unchanged.
 
 For installation, configuration, compositor keybinds, and IPC commands, see
 [`keybind-cheatsheet/README.md`](keybind-cheatsheet/README.md).
