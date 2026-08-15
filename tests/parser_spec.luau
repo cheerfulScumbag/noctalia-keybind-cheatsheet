@@ -225,7 +225,30 @@ host.resetRuntime()
 panel.onOpen()
 expectEqual(panel.lifecycleState().loading, true, "A missing service snapshot renders a loading state")
 expectEqual(treeContainsText(host.renderedTree(), "binding_count"), false, "A cold loading header does not display a zero count")
-panel.onExit(0)
+local niriSingleQuote = service.walkConfig("/fixtures/niri/single_quote.kdl", service.parseNiriContent)
+host.setFiles({
+  ["/fixtures/niri/single_quote.kdl"] = [[include './parts/window.kdl']],
+  ["/fixtures/niri/parts/window.kdl"] = [[binds { Mod+Q { close-window; } }]],
+})
+niriSingleQuote = service.walkConfig("/fixtures/niri/single_quote.kdl", service.parseNiriContent)
+expectEqual(#niriSingleQuote.bindings, 1, "Niri parses single-quoted include directives")
+
+local luaScan = service.scanHyprLua("/fixtures/hypr/complex.lua")
+host.setFiles({
+  ["/fixtures/hypr/complex.lua"] = [[
+-- 1. CustomCategory
+hl.bind("SUPER + 1", "exec foo", { description = "" .. "Bar" })
+hl.bind("SUPER + 2", "exec bar", {
+  description = "Baz"
+})
+]],
+})
+luaScan = service.scanHyprLua("/fixtures/hypr/complex.lua")
+local hyprJsonTest = host.jsonDecode or function(r) return {{ key = "1", dispatcher = "exec", arg = "foo", description = "Bar", modmask = 64 }, { key = "2", dispatcher = "exec", arg = "bar", description = "Baz", modmask = 64 }} end
+local parsedLuaJson = service.parseHyprJson(noctalia.json.encode(hyprJsonTest()), luaScan.rules) or {}
+expectEqual(#parsedLuaJson, 2, "Hyprland Lua JSON parses 2 bindings with complex rules")
+expectEqual(parsedLuaJson[1].category, "CustomCategory", "Hyprland Lua maps empty string prefix concatenation to category")
+expectEqual(parsedLuaJson[2].category, "CustomCategory", "Hyprland Lua maps multiline description assignments to category")
 
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")
