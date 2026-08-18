@@ -245,12 +245,17 @@ hl.bind("SUPER + 3", "exec workspace", { description = "Workspace " .. i })
 ]],
 })
 luaScan = service.scanHyprLua("/fixtures/hypr/complex.lua")
-local hyprJsonTest = host.jsonDecode or function(r) return {{ key = "1", dispatcher = "exec", arg = "foo", description = "Bar", modmask = 64 }, { key = "2", dispatcher = "exec", arg = "bar", description = "Baz", modmask = 64 }, { key = "3", dispatcher = "exec", arg = "workspace", description = "Workspace 1", modmask = 64 }} end
-local parsedLuaJson = service.parseHyprJson(noctalia.json.encode(hyprJsonTest()), luaScan.rules) or {}
+local hyprJsonTest = function() return {{ key = "1", dispatcher = "exec", arg = "foo", description = "Bar", modmask = 64 }, { key = "2", dispatcher = "exec", arg = "bar", description = "Baz", modmask = 64 }, { key = "3", dispatcher = "exec", arg = "workspace", description = "Workspace 1", modmask = 64 }} end
+local parsedLuaJson = service.parseHyprJson(host.noctalia.json.encode(hyprJsonTest()), luaScan.rules) or {}
 expectEqual(#parsedLuaJson, 3, "Hyprland Lua JSON parses 3 bindings with complex rules")
 expectEqual(parsedLuaJson[1].category, "CustomCategory", "Hyprland Lua maps empty string prefix concatenation to category")
 expectEqual(parsedLuaJson[2].category, "CustomCategory", "Hyprland Lua maps multiline description assignments to category")
 expectEqual(parsedLuaJson[3].category, "CustomCategory", "Hyprland Lua maps concatenated descriptions to category")
+
+local shortKeyPill = panel.keyPill("D", "default", "key")
+expectEqual(shortKeyPill.props.minWidth, 20, "Short key pill specifies minWidth to prevent QML elision")
+expectEqual(shortKeyPill.children[1].props.text, "D", "Short key pill contains exact key text D")
+expectEqual(shortKeyPill.children[1].props.maxLines, nil, "Short key pill label omits maxLines to prevent elision")
 
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")

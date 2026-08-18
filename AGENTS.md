@@ -40,6 +40,8 @@
 - Prefer supported visual alternatives such as muted colors or reduced opacity
   before proposing a text-encoding workaround.
 - Keep an approved workaround narrowly scoped and document why it is necessary.
+- Before starting any changes or PRs, always rebase onto or pull the latest `main` branch to obtain the latest automatically generated translation files. Translation files are updated and alphabetically sorted by repository automation on `main`, so starting from the latest `main` prevents merge conflicts and ordering diffs.
+- When opening a PR, always use the provided pull request template.
 
 ## Verification
 
