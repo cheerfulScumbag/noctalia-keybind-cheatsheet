@@ -257,6 +257,29 @@ expectEqual(shortKeyPill.props.minWidth, 20, "Short key pill specifies minWidth 
 expectEqual(shortKeyPill.children[1].props.text, "D", "Short key pill contains exact key text D")
 expectEqual(shortKeyPill.children[1].props.maxLines, nil, "Short key pill label omits maxLines to prevent elision")
 
+expectEqual(panel.formatKey("up"), "↑", "formatKey maps lowercase 'up' to arrow symbol ↑")
+expectEqual(panel.formatKey("Up"), "↑", "formatKey maps titlecase 'Up' to arrow symbol ↑")
+expectEqual(panel.formatKey("UP"), "↑", "formatKey maps uppercase 'UP' to arrow symbol ↑")
+expectEqual(panel.formatKey("down"), "↓", "formatKey maps lowercase 'down' to arrow symbol ↓")
+expectEqual(panel.formatKey("Down"), "↓", "formatKey maps titlecase 'Down' to arrow symbol ↓")
+expectEqual(panel.formatKey("left"), "←", "formatKey maps lowercase 'left' to arrow symbol ←")
+expectEqual(panel.formatKey("Left"), "←", "formatKey maps titlecase 'Left' to arrow symbol ←")
+expectEqual(panel.formatKey("right"), "→", "formatKey maps lowercase 'right' to arrow symbol →")
+expectEqual(panel.formatKey("Right"), "→", "formatKey maps titlecase 'Right' to arrow symbol →")
+expectEqual(panel.formatKey("RETURN"), "Enter", "formatKey maps uppercase 'RETURN' to Enter")
+expectEqual(panel.formatKey("Return"), "Enter", "formatKey maps titlecase 'Return' to Enter")
+expectEqual(panel.formatKey("escape"), "Esc", "formatKey maps lowercase 'escape' to Esc")
+expectEqual(panel.formatKey("Page_Up"), "PgUp", "formatKey maps 'Page_Up' to PgUp")
+expectEqual(panel.formatKey("Page_Down"), "PgDn", "formatKey maps 'Page_Down' to PgDn")
+expectEqual(panel.formatKey("Prior"), "PgUp", "formatKey maps 'Prior' to PgUp")
+expectEqual(panel.formatKey("Next"), "PgDn", "formatKey maps 'Next' to PgDn")
+expectEqual(panel.formatKey("BackSpace"), "Backspace", "formatKey maps 'BackSpace' to Backspace")
+expectEqual(panel.formatKey("Delete"), "Del", "formatKey maps 'Delete' to Del")
+expectEqual(panel.formatKey("D"), "D", "formatKey preserves regular key characters")
+
+local arrowKeyPill = panel.keyPill(panel.formatKey("up"), "default", "key")
+expectEqual(arrowKeyPill.children[1].props.text, "↑", "Arrow key pill renders ↑ arrow glyph")
+
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")
 end
