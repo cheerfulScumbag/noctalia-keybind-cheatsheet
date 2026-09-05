@@ -257,6 +257,24 @@ expectEqual(shortKeyPill.props.minWidth, 20, "Short key pill specifies minWidth 
 expectEqual(shortKeyPill.children[1].props.text, "D", "Short key pill contains exact key text D")
 expectEqual(shortKeyPill.children[1].props.maxLines, nil, "Short key pill label omits maxLines to prevent elision")
 
+host.setFiles({
+  ["/fixtures/hypr/modular_main.lua"] = [[
+local binds = require("sub.binds")
+-- 1. Main Apps
+hl.bind("SUPER, Return", "exec terminal", { description = "Main Terminal" })
+]],
+  ["/fixtures/hypr/sub/binds.lua"] = [[
+-- 2. Sub Binds
+hl.bind("SUPER, Q", "killactive", { description = 'Close window' })
+hl.bind("SUPER, E", "exec editor", { description = "Text \"Editor\"" })
+]],
+})
+local modularScan = service.scanHyprLua("/fixtures/hypr/modular_main.lua")
+expectEqual(#modularScan.rules, 3, "Modular Hyprland Lua scans rules across require modules")
+expectEqual(modularScan.rules[1].category, "Main Apps", "First module category preserved")
+expectEqual(modularScan.rules[2].category, "Sub Binds", "Required module category preserved")
+expectEqual(modularScan.rules[3].value, "Text \"Editor\"", "Escaped quote in description preserved")
+
 if failures > 0 then
   error(tostring(failures) .. " parser test(s) failed")
 end
